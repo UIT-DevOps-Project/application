@@ -15,7 +15,7 @@ fi
 
 # Lấy giá trị từ biến môi trường của container.
 # Nếu biến API_BASE_URL không được set, sẽ dùng giá trị mặc định.
-API_URL_VALUE=${API_BASE_URL:-http://localhost:8080}
+API_URL_VALUE=${API_BASE_URL:-http://localhost:3000}
 
 echo "Thay thế placeholder __API_BASE_URL__ bằng ${API_URL_VALUE} trong file ${INDEX_FILE}"
 

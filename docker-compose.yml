@@ -1,0 +1,35 @@
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: backend-postgres
+    environment:
+      POSTGRES_DB: cloudops_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password123
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    restart: unless-stopped
+  backend:
+    image: locdevops/backend-app:latest
+    container_name: backend-app
+    depends_on:
+      - postgres
+    command: sh -c "npx prisma migrate deploy && npm start"
+    environment:
+      DATABASE_URL: postgresql://postgres:password123@postgres:5432/cloudops_db
+    ports:
+      - "3000:3000"  
+    restart: unless-stopped
+  frontend:
+    image: locdevops/frontend:latest
+    container_name: frontend-app
+    depends_on:
+      - backend
+    ports:
+      - "8080:80"
+    restart: unless-stopped
+volumes:
+  postgres_data:
+    driver: local
