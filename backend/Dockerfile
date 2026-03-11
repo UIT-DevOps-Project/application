@@ -5,7 +5,7 @@ WORKDIR /app
 
 COPY package*.json ./
 
-RUN npm ci
+RUN npm ci --omit=dev
 
 COPY prisma ./prisma
 COPY src ./src
@@ -14,8 +14,6 @@ RUN npx prisma generate
 
 # STAGE 2: Runtime
 FROM node:20-bullseye-slim AS production
-
-RUN apt-get update && apt-get install -y libssl1.1
 
 WORKDIR /app
 
@@ -27,5 +25,7 @@ COPY --from=builder /app/prisma ./prisma
 USER node
 
 EXPOSE 3000
+
+HEALTHCHECK CMD curl -f http://localhost:3000 || exit 1
 
 CMD ["node", "src/server.js"]

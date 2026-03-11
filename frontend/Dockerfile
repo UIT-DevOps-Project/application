@@ -31,8 +31,10 @@ RUN chmod +x /entrypoint.sh
 
 ENTRYPOINT ["/entrypoint.sh"]
 
+RUN touch /var/run/nginx.pid && chown appuser:appuser /var/run/nginx.pid
+
 USER appuser
 
-EXPOSE 5173
+EXPOSE 80
 
 CMD ["nginx", "-g", "daemon off;"]
