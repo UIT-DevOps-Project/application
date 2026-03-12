@@ -12,7 +12,7 @@ services:
       - postgres_data:/var/lib/postgresql/data
     restart: unless-stopped
   backend:
-    image: locdevops/backend-app:latest
+    image: ghcr.io/huynhtanloc/0908/backend-app:latest
     container_name: backend-app
     depends_on:
       - postgres
@@ -23,7 +23,7 @@ services:
       - "3000:3000"  
     restart: unless-stopped
   frontend:
-    image: locdevops/frontend:latest
+    image: ghcr.io/huynhtanloc/0908/frontend-app:latest
     container_name: frontend-app
     depends_on:
       - backend
