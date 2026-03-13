@@ -20,11 +20,14 @@ on:
       - ".github/workflows/**"
       - "docker-compose.yml"
 
+permissions:
+      contents: read
+      packages: write
+
 env:
   REGISTRY: ghcr.io
   BACKEND_IMAGE: backend-app
   FRONTEND_IMAGE: frontend-app
-  OWNER: ${{ github.repository_owner }}
 
 jobs:
   detect-changes:
@@ -35,9 +38,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set lowercase owner
-        run: |
-          echo "OWNER=$(echo ${{ github.repository_owner }} | tr '[:upper:]' '[:lower:]')" >> $GITHUB_ENV
 
       - name: Detect Changes
         id: filter
@@ -59,9 +59,6 @@ jobs:
     if: needs.detect-changes.outputs.backend == 'true'
     runs-on: ubuntu-latest
 
-    permissions:
-      contents: read
-      packages: write
     steps:
       - uses: actions/checkout@v4
 
@@ -89,10 +86,6 @@ jobs:
     needs: detect-changes
     if: needs.detect-changes.outputs.frontend == 'true'
     runs-on: ubuntu-latest
-
-    permissions:
-      contents: read
-      packages: write
 
     steps:
       - uses: actions/checkout@v4
