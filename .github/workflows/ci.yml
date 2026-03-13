@@ -9,7 +9,7 @@ on:
       - "frontend/**"
       - "Dockerfile"
       - ".github/workflows/**"
-      - "docker-compose.yml"
+
   pull_request:
     branches:
       - main
@@ -18,7 +18,7 @@ on:
       - "frontend/**"
       - "Dockerfile"
       - ".github/workflows/**"
-      - "docker-compose.yml"
+  
 
 permissions:
       contents: read
@@ -38,6 +38,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      
       - name: Detect Changes
         id: filter
         uses: dorny/paths-filter@v3
@@ -46,12 +47,10 @@ jobs:
             backend:
               - 'backend/**'
               - 'Dockerfile'
-              - 'docker-compose.yml'
               - '.github/workflows/**'
             frontend:
               - 'frontend/**'
               - 'Dockerfile'
-              - 'docker-compose.yml'
               - '.github/workflows/**'
   build-backend:
     needs: detect-changes
