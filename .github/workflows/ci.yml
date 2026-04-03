@@ -56,13 +56,31 @@ jobs:
               - '.github/workflows/**'
 
 # =========================================================
-# BUILD + SCAN + PUSH BACKEND
+# SCAN JOBS (Gọi file template trivy-template.yaml)
 # =========================================================
-  backend:
+  scan-backend:
     needs: detect-changes
     if: needs.detect-changes.outputs.backend == 'true'
-    runs-on: ubuntu-latest
+    uses: ./.github/workflows/trivy-template.yaml
+    with:
+      context: ./backend
+      component: backend
 
+  scan-frontend:
+    needs: detect-changes
+    if: needs.detect-changes.outputs.frontend == 'true'
+    uses: ./.github/workflows/trivy-template.yaml
+    with:
+      context: ./frontend
+      component: frontend
+
+# =========================================================
+# PUSH JOBS (Chỉ chạy nếu Scan vượt qua)
+# =========================================================
+  push-backend:
+    needs: [detect-changes, scan-backend]
+    if: needs.detect-changes.outputs.backend == 'true'
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
@@ -75,94 +93,7 @@ jobs:
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
-      
-      - name: Setup Trivy
-        uses: aquasecurity/setup-trivy@v0.2.0
-        
 
-# ---------------- BUILD (NO PUSH) ----------------
-      - name: Build Backend Image (local)
-        uses: docker/build-push-action@v5
-        with:
-          context: ./backend
-          push: false
-          tags: backend:scan-temp
-          load: true
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-
-# ---------------- SBOM ----------------
-      - name: Generate SBOM
-        uses: anchore/sbom-action@v0
-        with:
-          image: backend:scan-temp
-          format: spdx-json
-          output-file: backend-sbom.json
-# ---------------- TRIVY REPORT (VULN) ----------------
-      - name: Generate Vulnerability Report
-        run: |
-          trivy image \
-            --format json \
-            -o backend-vuln.json \
-            backend:scan-temp
-
-# ---------------- TRIVY REPORT (SECRET) ----------------
-      - name: Generate Secret Report
-        run: |
-          trivy fs \
-            --scanners secret \
-            --format json \
-            -o backend-secret.json \
-            ./backend
-
-# ---------------- TRIVY REPORT (MISCONFIG) ----------------
-      - name: Generate Misconfig Report
-        run: |
-          trivy config \
-            --format json \
-            -o backend-misconfig.json \
-            ./backend
-
-# ---------------- MERGE REPORT ----------------
-      - name: Merge Trivy Reports
-        run: |
-          jq -s 'add' \
-            backend-vuln.json \
-            backend-secret.json \
-            backend-misconfig.json \
-            > backend-trivy-full.json
-
-# ---------------- UPLOAD MERGED REPORT ----------------
-      - name: Upload Full Trivy Report
-        uses: actions/upload-artifact@v4
-        with:
-          name: backend-trivy-full-report
-          path: backend-trivy-full.json
-
-# ---------------- ENFORCE SECURITY ----------------
-      - name: Enforce Vulnerability Scan
-        uses: aquasecurity/trivy-action@0.20.0
-        with:
-          image-ref: backend:scan-temp
-          exit-code: 1
-          severity: HIGH,CRITICAL
-
-      - name: Enforce Secret Scan
-        uses: aquasecurity/trivy-action@0.20.0
-        with:
-          scan-type: fs
-          scan-ref: ./backend
-          scanners: secret
-          exit-code: 1
-
-      - name: Enforce Misconfig Scan
-        uses: aquasecurity/trivy-action@0.20.0
-        with:
-          scan-type: config
-          scan-ref: ./backend
-          exit-code: 1
-
-# ---------------- PUSH ONLY IF PASS ----------------
       - name: Build & Push Backend Image
         uses: docker/build-push-action@v5
         with:
@@ -174,21 +105,10 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-# ---------------- UPLOAD ARTIFACT ----------------
-      - name: Upload SBOM
-        uses: actions/upload-artifact@v4
-        with:
-          name: backend-sbom
-          path: backend-sbom.json
-
-# =========================================================
-# BUILD + SCAN + PUSH FRONTEND
-# =========================================================
-  frontend:
-    needs: detect-changes
+  push-frontend:
+    needs: [detect-changes, scan-frontend]
     if: needs.detect-changes.outputs.frontend == 'true'
     runs-on: ubuntu-latest
-
     steps:
       - uses: actions/checkout@v4
 
@@ -202,93 +122,6 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Setup Trivy
-        uses: aquasecurity/setup-trivy@v0.2.0
-
-# ---------------- BUILD ----------------
-      - name: Build Frontend Image (local)
-        uses: docker/build-push-action@v5
-        with:
-          context: ./frontend
-          push: false
-          tags: frontend:scan-temp
-          load: true
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-
-# ---------------- SBOM ----------------
-      - name: Generate SBOM
-        uses: anchore/sbom-action@v0
-        with:
-          image: frontend:scan-temp
-          format: spdx-json
-          output-file: frontend-sbom.json
-
-# ---------------- TRIVY REPORT (VULN) ----------------
-      - name: Generate Vulnerability Report
-        run: |
-          trivy image \
-            --format json \
-            -o frontend-vuln.json \
-            frontend:scan-temp
-
-# ---------------- TRIVY REPORT (SECRET) ----------------
-      - name: Generate Secret Report
-        run: |
-          trivy fs \
-            --scanners secret \
-            --format json \
-            -o frontend-secret.json \
-            ./frontend
-
-# ---------------- TRIVY REPORT (MISCONFIG) ----------------
-      - name: Generate Misconfig Report
-        run: |
-          trivy config \
-            --format json \
-            -o frontend-misconfig.json \
-            ./frontend
-
-# ---------------- MERGE REPORT ----------------
-      - name: Merge Trivy Reports
-        run: |
-          jq -s 'add' \
-            frontend-vuln.json \
-            frontend-secret.json \
-            frontend-misconfig.json \
-            > frontend-trivy-full.json
-
-# ---------------- UPLOAD MERGED REPORT ----------------
-      - name: Upload Full Trivy Report
-        uses: actions/upload-artifact@v4
-        with:
-          name: frontend-trivy-full-report
-          path: frontend-trivy-full.json
-
-# ---------------- ENFORCE SECURITY ----------------
-      - name: Enforce Vulnerability Scan
-        uses: aquasecurity/trivy-action@0.20.0
-        with:
-          image-ref: frontend:scan-temp
-          exit-code: 1
-          severity: HIGH,CRITICAL
-
-      - name: Enforce Secret Scan
-        uses: aquasecurity/trivy-action@0.20.0
-        with:
-          scan-type: fs
-          scan-ref: ./frontend
-          scanners: secret
-          exit-code: 1
-
-      - name: Enforce Misconfig Scan
-        uses: aquasecurity/trivy-action@0.20.0
-        with:
-          scan-type: config
-          scan-ref: ./frontend
-          exit-code: 1
-
-# ---------------- PUSH ----------------
       - name: Build & Push Frontend Image
         uses: docker/build-push-action@v5
         with:
@@ -299,10 +132,3 @@ jobs:
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAMESPACE }}/${{ env.FRONTEND_IMAGE }}:${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
-
-# ---------------- ARTIFACT ----------------
-      - name: Upload SBOM
-        uses: actions/upload-artifact@v4
-        with:
-          name: frontend-sbom
-          path: frontend-sbom.json

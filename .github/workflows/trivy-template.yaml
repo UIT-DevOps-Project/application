@@ -1,0 +1,90 @@
+name: Trivy Scan
+
+on:
+  workflow_call:
+    inputs:
+      context:
+        required: true
+        type: string
+      component:
+        required: true
+        type: string
+
+
+jobs:
+  security-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Setup Trivy
+        uses: aquasecurity/setup-trivy@v0.2.6
+
+      - name: Build Image
+        uses: docker/build-push-action@v5
+        with:
+          context: ${{ inputs.context }}
+          push: false
+          tags: ${{ inputs.component }}:scan-temp
+          load: true
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Generate SBOM
+        uses: anchore/sbom-action@v0
+        with:
+          image: ${{ inputs.component }}:scan-temp
+          format: spdx-json
+          output-file: ${{ inputs.component }}-sbom.json
+
+      - name: Generate Vulnerability Report
+        run: trivy image --format json -o ${{ inputs.component }}-vuln.json ${{ inputs.component }}:scan-temp
+
+      - name: Generate Secret Report
+        run: trivy fs --scanners secret --format json -o ${{ inputs.component }}-secret.json ${{ inputs.context }}
+
+      - name: Generate Misconfig Report
+        run: trivy config --format json -o ${{ inputs.component }}-misconfig.json ${{ inputs.context }}
+
+      - name: Merge Trivy Reports
+        run: |
+          jq -s 'add' ${{ inputs.component }}-vuln.json ${{ inputs.component }}-secret.json ${{ inputs.component }}-misconfig.json > ${{ inputs.component }}-trivy-full.json
+
+      - name: Upload Full Trivy Report
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ inputs.component }}-trivy-full-report
+          path: ${{ inputs.component }}-trivy-full.json
+
+      - name: Upload SBOM
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ inputs.component }}-sbom
+          path: ${{ inputs.component }}-sbom.json
+
+      # Enforce Security - Nếu phát hiện lỗi, exit 1 sẽ làm job failed
+      - name: Enforce Vulnerability Scan
+        uses: aquasecurity/trivy-action@0.35.0
+        with:
+          image-ref: ${{ inputs.component }}:scan-temp
+          exit-code: 1
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          
+      - name: Enforce Secret Scan
+        uses: aquasecurity/trivy-action@0.35.0
+        with:
+          scan-type: fs
+          scan-ref: ${{ inputs.context }}
+          scanners: secret
+          exit-code: 1
+
+      - name: Enforce Misconfig Scan
+        uses: aquasecurity/trivy-action@0.35.0
+        with:
+          scan-type: config
+          scan-ref: ${{ inputs.context }}
+          exit-code: 1

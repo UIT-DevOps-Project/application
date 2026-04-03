@@ -49,3 +49,7 @@ dockercompose, .github/workflows/*.
     + job 8: push code: nếu scan mọi thứ ok rồi thì push lên registry với 2 tag là latest và sha, tag latest để deploy còn tag sha để cho dễ phân biệt và rollback
 
     + job 9: upload artifact cho SBOM để dễ dàng lưu và audit
+
+## Tương tự job trên nhưng chia 2 pipeline. Một pipeline đóng vai trò như function sử dụng workflow_call. 
+- Setup và cài đặt Trivy-template.yaml
+- Ci.yaml call để gọi hàm trong Trivy-template.yaml để sử dụng
