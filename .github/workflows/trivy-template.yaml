@@ -1,0 +1,54 @@
+name: Trivy Scan
+
+on:
+  workflow_call:
+    inputs:
+      context:
+        required: true
+        type: string
+      component:
+        required: true
+        type: string
+
+jobs:
+  security-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Setup Trivy
+        uses: aquasecurity/setup-trivy@v0.2.6
+
+      # 1. Chỉ Build Image
+      - name: Build Image
+        uses: docker/build-push-action@v5
+        with:
+          context: ${{ inputs.context }}
+          push: false
+          tags: ${{ inputs.component }}:scan-temp
+          load: true
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # 2. Xuất báo cáo lỗi của Image ra file JSON để đọc
+      - name: Generate Image Vulnerability Report
+        run: trivy image --format json -o ${{ inputs.component }}-vuln.json ${{ inputs.component }}:scan-temp
+
+      # 3. Upload báo cáo lên GitHub Artifacts
+      - name: Upload Vulnerability Report
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ inputs.component }}-vulnerability-report
+          path: ${{ inputs.component }}-vuln.json
+
+      # 4. CHỐT CHẶN: Đánh rớt pipeline nếu Image có lỗi HIGH/CRITICAL (đã có bản vá)
+      - name: Enforce Image Vulnerability Scan
+        uses: aquasecurity/trivy-action@0.35.0
+        with:
+          image-ref: ${{ inputs.component }}:scan-temp
+          exit-code: 1
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true

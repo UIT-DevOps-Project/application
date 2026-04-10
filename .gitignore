@@ -11,3 +11,5 @@ __pycache__/
 
 # Terraform lock file
 .terraform.lock.hcl
+
+node_modules/
