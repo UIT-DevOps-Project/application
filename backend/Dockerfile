@@ -19,8 +19,7 @@ WORKDIR /app
 # Cài đặt curl để phục vụ cho lệnh HEALTHCHECK bên dưới
 RUN apt-get update && apt-get install -y --no-install-recommends curl && rm -rf /var/lib/apt/lists/*
 
-# Xóa npm và npx để giảm kích thước image, vì chúng không cần thiết cho runtime và 
-RUN rm -rf /usr/local/lib/node_modules/npm /usr/local/bin/npm /usr/local/bin/npx
+# Giữ nguyên npm/npx trong runtime image để tương thích với các lệnh khởi động
 
 # Copy file từ builder và gán quyền cho user 'node' có sẵn của image
 COPY --chown=node:node --from=builder /app/node_modules ./node_modules
