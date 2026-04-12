@@ -13,19 +13,41 @@ services:
     restart: unless-stopped
     
   backend:
-    image: ghcr.io/uit-devops-project/backend-app:latest
+    # image: ghcr.io/uit-devops-project/backend-app:latest
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
     container_name: backend-app
     depends_on:
       - postgres
-    command: sh -c "npx prisma migrate deploy && npm start"
     environment:
       DATABASE_URL: postgresql://postgres:password123@postgres:5432/cloudops_db
     ports:
       - "3000:3000"  
     restart: unless-stopped
+  
+  migration:
+    # Nâng lên Node 22 để fix lỗi EBADENGINE
+    image: node:22-bookworm-slim
+    container_name: backend-migration
+    working_dir: /app
+    volumes:
+      - .:/app
+    depends_on:
+      - postgres
+    environment:
+      DATABASE_URL: postgresql://postgres:password123@postgres:5432/cloudops_db
+    # Cài openssl trước, sau đó mới chạy migrate và chỉ định rõ đường dẫn schema
+    command: >
+      sh -c "apt-get update && apt-get install -y openssl && 
+      npm install prisma@5.22.0 && 
+      npx prisma db push --schema $$(find . -name schema.prisma | head -n 1)"
 
   frontend:
-    image: ghcr.io/uit-devops-project/frontend-app:latest
+    # image: ghcr.io/uit-devops-project/frontend-app:latest
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
     container_name: frontend-app
     depends_on:
       - backend

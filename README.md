@@ -53,3 +53,7 @@ dockercompose, .github/workflows/*.
 ## Tương tự job trên nhưng chia 2 pipeline. Một pipeline đóng vai trò như function sử dụng workflow_call. 
 - Setup và cài đặt Trivy-template.yaml
 - Ci.yaml call để gọi hàm trong Trivy-template.yaml để sử dụng
+
+## Xây dựng CD pipeline
+- Pipeline trigger khi gắn tags release
+- Khi tạo release tags thì nó sẽ tạo ra 2 tags một là tags version, 2 là tags stable cho biết là phiên bản deploy mới nhất
