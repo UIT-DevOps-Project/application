@@ -13,4 +13,3 @@ __pycache__/
 .terraform.lock.hcl
 
 node_modules/
-cd.yml

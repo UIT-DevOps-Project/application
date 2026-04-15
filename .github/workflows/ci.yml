@@ -79,13 +79,12 @@ jobs:
 # =========================================================
   push-backend:
     needs: [detect-changes, scan-backend]
-    if: needs.detect-changes.outputs.backend == 'true'
+    if: needs.detect-changes.outputs.backend == 'true' && github.event_name == 'push'  # Chỉ login khi là push, không cần thiết khi là PR vì không push image
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
       - name: Login to GHCR
-        if: github.event_name == 'push' # Chỉ login khi là push, không cần thiết khi là PR vì không push image
         uses: docker/login-action@v3
         with:
           registry: ${{ env.REGISTRY }}
@@ -110,13 +109,12 @@ jobs:
 
   push-frontend:
     needs: [detect-changes, scan-frontend]
-    if: needs.detect-changes.outputs.frontend == 'true'
+    if: needs.detect-changes.outputs.frontend == 'true' && github.event_name == 'push'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
       - name: Login to GHCR
-        if: github.event_name == 'push' # Chỉ login khi là push, không cần thiết khi là PR vì không push image
         uses: docker/login-action@v3
         with:
           registry: ${{ env.REGISTRY }}
