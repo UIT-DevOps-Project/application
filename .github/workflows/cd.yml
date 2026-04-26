@@ -35,33 +35,22 @@ jobs:
         uses: docker/setup-buildx-action@v3
 
       # =========================================================
-      # 1. BUILD & PUSH BACKEND
+      # 1. PROMOTE BACKEND (re-tag image đã scan từ CI)
       # =========================================================
-      - name: Build & Push Backend Image
-        uses: docker/build-push-action@v5
-        with:
-          context: ./backend
-          push: true
-          # Sử dụng ${{ github.ref_name }} để lấy tên tag
-          tags: |
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAMESPACE }}/${{ env.BACKEND_IMAGE }}:${{ github.ref_name }}
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAMESPACE }}/${{ env.BACKEND_IMAGE }}:stable
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+      - name: Promote Backend Image
+        run: |
+          docker buildx imagetools create \
+            --tag ${{ env.REGISTRY }}/${{ env.IMAGE_NAMESPACE }}/${{ env.BACKEND_IMAGE }}:${{ github.ref_name }} \
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAMESPACE }}/${{ env.BACKEND_IMAGE }}:${{ vars.BACKEND_IMAGE_SHA }}
 
       # =========================================================
-      # 2. BUILD & PUSH FRONTEND
+      # 2. PROMOTE FRONTEND (re-tag image đã scan từ CI)
       # =========================================================
-      - name: Build & Push Frontend Image
-        uses: docker/build-push-action@v5
-        with:
-          context: ./frontend
-          push: true
-          tags: |
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAMESPACE }}/${{ env.FRONTEND_IMAGE }}:${{ github.ref_name }}
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAMESPACE }}/${{ env.FRONTEND_IMAGE }}:stable
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+      - name: Promote Frontend Image
+        run: |
+          docker buildx imagetools create \
+            --tag ${{ env.REGISTRY }}/${{ env.IMAGE_NAMESPACE }}/${{ env.FRONTEND_IMAGE }}:${{ github.ref_name }} \
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAMESPACE }}/${{ env.FRONTEND_IMAGE }}:${{ vars.FRONTEND_IMAGE_SHA }}
 
       # =========================================================
       # 3. TẠO GITHUB RELEASE VÀ AUTO-CHANGELOG

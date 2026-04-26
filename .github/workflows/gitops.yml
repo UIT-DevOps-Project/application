@@ -1,0 +1,83 @@
+name: GitOps - Update Deployment Version
+
+on:
+  release:
+    types: [published]
+
+env:
+  GITOPS_REPO: UIT-DevOps-Project/k8s-manifest
+
+jobs:
+# =========================================================
+# STAGING: tự update và tạo PR
+# =========================================================
+  update-staging:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout k8s-manifest
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.GITOPS_REPO }}
+          token: ${{ secrets.GITOPS_TOKEN }}
+
+      - name: Update staging image tags
+        run: |
+          VERSION=${{ github.event.release.tag_name }}
+          sed -i "s/^\( *tag: \).*/\1$VERSION/" apps/backend/values-staging.yaml
+          sed -i "s/^\( *tag: \).*/\1$VERSION/" apps/frontend/values-staging.yaml
+
+      - name: Commit, push and create PR
+        env:
+          GH_TOKEN: ${{ secrets.GITOPS_TOKEN }}
+        run: |
+          VERSION=${{ github.event.release.tag_name }}
+          BRANCH=deploy/staging-$VERSION
+
+          git config user.email "ci-bot@github.com"
+          git config user.name "CI Bot"
+          git checkout -b $BRANCH
+          git commit -am "deploy(staging): update image tag to $VERSION"
+          git push origin $BRANCH
+
+          gh pr create \
+            --title "deploy(staging): update to $VERSION" \
+            --body "Automated update of staging deployment to version \`$VERSION\`." \
+            --base main \
+            --head $BRANCH
+
+# =========================================================
+# PRODUCTION: tạo PR, chờ manual merge
+# =========================================================
+  update-production:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout k8s-manifest
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.GITOPS_REPO }}
+          token: ${{ secrets.GITOPS_TOKEN }}
+
+      - name: Update production image tags
+        run: |
+          VERSION=${{ github.event.release.tag_name }}
+          sed -i "s/^\( *tag: \).*/\1$VERSION/" apps/backend/values-production.yaml
+          sed -i "s/^\( *tag: \).*/\1$VERSION/" apps/frontend/values-production.yaml
+
+      - name: Commit, push and create PR
+        env:
+          GH_TOKEN: ${{ secrets.GITOPS_TOKEN }}
+        run: |
+          VERSION=${{ github.event.release.tag_name }}
+          BRANCH=deploy/production-$VERSION
+
+          git config user.email "ci-bot@github.com"
+          git config user.name "CI Bot"
+          git checkout -b $BRANCH
+          git commit -am "deploy(production): update image tag to $VERSION"
+          git push origin $BRANCH
+
+          gh pr create \
+            --title "deploy(production): update to $VERSION" \
+            --body "Release \`$VERSION\` is ready for production. Review and merge to deploy." \
+            --base main \
+            --head $BRANCH
