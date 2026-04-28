@@ -1,0 +1,47 @@
+name: Update GitOps Manifests - Staging
+
+on:
+  release:
+    types: [published]
+
+env:
+  GITOPS_REPO: UIT-DevOps-Project/k8s-manifest
+
+jobs:
+  update-staging:
+    name: Update Staging Manifests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout k8s-manifest repo
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.GITOPS_REPO }}
+          token: ${{ secrets.GITOPS_TOKEN }}
+
+      - name: Update image tags for staging
+        run: |
+          TAG=${{ github.ref_name }}
+          sed -i "s/  tag: .*/  tag: $TAG/" apps/backend/values-staging.yaml
+          sed -i "s/  tag: .*/  tag: $TAG/" apps/frontend/values-staging.yaml
+
+      - name: Create Pull Request for Staging
+        uses: peter-evans/create-pull-request@v6
+        with:
+          token: ${{ secrets.GITOPS_TOKEN }}
+          branch: release/staging-${{ github.ref_name }}
+          base: main
+          commit-message: "chore: update staging image tags to ${{ github.ref_name }}"
+          title: "chore: update staging images to ${{ github.ref_name }}"
+          body: |
+            ## Staging Release ${{ github.ref_name }}
+
+            Cập nhật image tags cho môi trường **staging**:
+            - `ghcr.io/uit-devops-project/backend-app:${{ github.ref_name }}`
+            - `ghcr.io/uit-devops-project/frontend-app:${{ github.ref_name }}`
+
+            **Files changed:**
+            - `apps/backend/values-staging.yaml`
+            - `apps/frontend/values-staging.yaml`
+
+            > Tự động tạo bởi CD pipeline từ release [${{ github.ref_name }}](https://github.com/UIT-DevOps-Project/application/releases/tag/${{ github.ref_name }})
+          labels: staging, automated-release
