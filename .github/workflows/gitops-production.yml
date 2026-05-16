@@ -1,0 +1,52 @@
+name: Update GitOps Manifests - Production
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Version tag to deploy (e.g. v1.0.0)'
+        required: true
+        type: string
+
+env:
+  GITOPS_REPO: UIT-DevOps-Project/k8s-manifest
+
+jobs:
+  update-production:
+    name: Update Production Manifests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout k8s-manifest repo
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.GITOPS_REPO }}
+          token: ${{ secrets.GITOPS_TOKEN }}
+
+      - name: Update image tags for production
+        run: |
+          TAG=${{ github.event.inputs.tag }}
+          sed -i "s/  tag: .*/  tag: $TAG/" apps/backend/values-production.yaml
+          sed -i "s/  tag: .*/  tag: $TAG/" apps/frontend/values-production.yaml
+
+      - name: Create Pull Request for Production
+        uses: peter-evans/create-pull-request@v6
+        with:
+          token: ${{ secrets.GITOPS_TOKEN }}
+          branch: release/production-${{ github.event.inputs.tag }}
+          base: main
+          commit-message: "chore: update production image tags to ${{ github.event.inputs.tag }}"
+          title: "chore: update production images to ${{ github.event.inputs.tag }}"
+          body: |
+            ## Production Release ${{ github.event.inputs.tag }}
+
+            Cập nhật image tags cho môi trường **production**:
+            - `ghcr.io/uit-devops-project/backend-app:${{ github.event.inputs.tag }}`
+            - `ghcr.io/uit-devops-project/frontend-app:${{ github.event.inputs.tag }}`
+
+            **Files changed:**
+            - `apps/backend/values-production.yaml`
+            - `apps/frontend/values-production.yaml`
+
+            > Được trigger thủ công bởi @${{ github.actor }} từ release [${{ github.event.inputs.tag }}](https://github.com/UIT-DevOps-Project/application/releases/tag/${{ github.event.inputs.tag }})
+            >  Vui lòng review kỹ trước khi merge PR này vào production.
+          labels: production, automated-release
