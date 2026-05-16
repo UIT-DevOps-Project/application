@@ -1,9 +1,8 @@
 name: CD Pipeline (Release and Publish Image to GHCR)
 
 on:
-  push:
-   tags:
-    - 'v*.*.*'  # Trigger on version tags like v1.0.0
+  release:
+    types: [published]
 
 permissions:
   contents: write
