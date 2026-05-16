@@ -153,7 +153,7 @@ jobs:
 
       - uses: docker/setup-buildx-action@v3
 
-      - name: Build backend (production stage)
+      - name: Build backend
         uses: docker/build-push-action@v5
         with:
           context: ./backend
@@ -162,16 +162,6 @@ jobs:
           tags: backend:test
           cache-from: type=gha
           cache-to: type=gha,mode=max
-
-      - name: Build backend (builder stage for migration)
-        uses: docker/build-push-action@v5
-        with:
-          context: ./backend
-          target: builder
-          load: true
-          push: false
-          tags: backend:migrate
-          cache-from: type=gha
 
       - name: Build frontend
         uses: docker/build-push-action@v5
@@ -202,10 +192,10 @@ jobs:
       - name: Run Prisma migration
         run: |
           docker run --rm --network app \
+            -v "$PWD/backend":/app -w /app \
             -e DATABASE_URL=postgresql://postgres:password123@pg:5432/cloudops_db \
-            -w /app \
-            backend:migrate \
-            npx prisma db push --accept-data-loss
+            node:20-bookworm-slim \
+            sh -c "apt-get update -qq && apt-get install -y -qq openssl && npm ci --quiet --omit=dev && npx prisma db push --accept-data-loss"
 
       - name: Start backend
         run: |
