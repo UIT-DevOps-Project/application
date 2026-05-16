@@ -134,3 +134,144 @@ jobs:
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAMESPACE }}/${{ env.FRONTEND_IMAGE }}:${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+# =========================================================
+# SMOKE TEST — Dựng app + curl endpoint (chỉ chạy ở PR)
+# =========================================================
+  smoke-test:
+    needs: [detect-changes, scan-backend, scan-frontend]
+    if: |
+      always() &&
+      github.event_name == 'pull_request' &&
+      (needs.detect-changes.outputs.backend == 'true' || needs.detect-changes.outputs.frontend == 'true') &&
+      !contains(needs.*.result, 'failure')
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build backend (production stage)
+        uses: docker/build-push-action@v5
+        with:
+          context: ./backend
+          load: true
+          push: false
+          tags: backend:test
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build backend (builder stage for migration)
+        uses: docker/build-push-action@v5
+        with:
+          context: ./backend
+          target: builder
+          load: true
+          push: false
+          tags: backend:migrate
+          cache-from: type=gha
+
+      - name: Build frontend
+        uses: docker/build-push-action@v5
+        with:
+          context: ./frontend
+          load: true
+          push: false
+          tags: frontend:test
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Create docker network
+        run: docker network create app
+
+      - name: Start postgres
+        run: |
+          docker run -d --name pg --network app \
+            -e POSTGRES_DB=cloudops_db \
+            -e POSTGRES_USER=postgres \
+            -e POSTGRES_PASSWORD=password123 \
+            postgres:15-alpine
+          # Đợi postgres ready
+          for i in {1..20}; do
+            docker exec pg pg_isready -U postgres > /dev/null 2>&1 && echo "postgres ready" && break
+            echo "waiting postgres... ($i/20)"; sleep 2
+          done
+
+      - name: Run Prisma migration
+        run: |
+          docker run --rm --network app \
+            -e DATABASE_URL=postgresql://postgres:password123@pg:5432/cloudops_db \
+            -w /app \
+            backend:migrate \
+            npx prisma db push --accept-data-loss
+
+      - name: Start backend
+        run: |
+          docker run -d --name backend --network app -p 3000:3000 \
+            -e DATABASE_URL=postgresql://postgres:password123@pg:5432/cloudops_db \
+            backend:test
+
+      - name: Start frontend
+        run: |
+          docker run -d --name frontend --network app -p 8080:80 \
+            -e API_BASE_URL=http://localhost:3000 \
+            frontend:test
+
+      - name: Wait for backend
+        run: |
+          for i in {1..30}; do
+            curl -fsS -o /dev/null http://localhost:3000/api-docs && echo "backend up" && exit 0
+            echo "waiting backend... ($i/30)"; sleep 2
+          done
+          echo "Backend not ready in time"; exit 1
+
+      - name: Wait for frontend
+        run: |
+          for i in {1..15}; do
+            curl -fsS -o /dev/null http://localhost:8080/ && echo "frontend up" && exit 0
+            echo "waiting frontend... ($i/15)"; sleep 2
+          done
+          echo "Frontend not ready in time"; exit 1
+
+      - name: Smoke tests — Backend
+        run: |
+          set -e
+          echo "── GET / (expect 302 → /api-docs) ──"
+          curl -fsS -L -o /dev/null -w "final HTTP %{http_code}, %{url_effective}\n" http://localhost:3000/
+
+          echo "── GET /api-docs (Swagger UI) ──"
+          curl -fsS http://localhost:3000/api-docs | grep -qi "swagger" && echo "swagger UI OK"
+
+          echo "── GET /boards (DB-backed endpoint) ──"
+          BODY=$(curl -fsS http://localhost:3000/boards)
+          echo "response: $BODY"
+          echo "$BODY" | grep -qE '^\[' && echo "boards returns JSON array OK"
+
+          echo "── GET /cards ──"
+          curl -fsS -o /dev/null -w "HTTP %{http_code}\n" http://localhost:3000/cards
+
+      - name: Smoke tests — Frontend
+        run: |
+          set -e
+          echo "── GET / ──"
+          BODY=$(curl -fsS http://localhost:8080/)
+          echo "$BODY" | grep -qi '<div id="root"' && echo "frontend HTML OK"
+          echo "$BODY" | grep -q "__API_BASE_URL__" && { echo "ERROR: placeholder không được replace"; exit 1; } || echo "API_BASE_URL replaced OK"
+
+      - name: Dump logs on failure
+        if: failure()
+        run: |
+          echo "════════ Backend logs ════════"
+          docker logs backend || true
+          echo "════════ Frontend logs ════════"
+          docker logs frontend || true
+          echo "════════ Postgres logs ════════"
+          docker logs pg || true
+
+      - name: Cleanup
+        if: always()
+        run: |
+          docker rm -f backend frontend pg 2>/dev/null || true
+          docker network rm app 2>/dev/null || true
